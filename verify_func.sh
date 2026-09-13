@@ -12,13 +12,42 @@ W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT
 gcc -O1 -c -o "$W/f.o" "$SRC"
 objcopy -O binary --only-section=.text "$W/f.o" "$W/f.bin"
 "$SDRE" --file "$W/f.bin" --arch x86_64 --target arm --emit-only --base-addr 0 > "$W/t.s"
+# адрес целевой функции и следующей (границы в выводе)
+nm -S --defined-only "$W/f.o" | awk '$3=="T"||$3=="t" {print $1, $4}' | sort > "$W/fn.txt"
 
 # первая функция из вывода sdre (до пустой строки) + обёртка
-python3 - "$W" "$A0" "$A1" "$IDX" "$R2" <<'PY'
-import sys, os
-w, a0, a1, idx, r2 = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4]), sys.argv[5]
-chunks = [c for c in open(os.path.join(w,'t.s')).read().split('\n\n') if c.strip()]
-body = chunks[idx].split('\n')
+python3 - "$W" "$A0" "$A1" "$IDX" "$R2" "$FUNC" <<'PY'
+import sys, os, re
+w, a0, a1, idx, r2, func = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4]), sys.argv[5], sys.argv[6]
+asm = open(os.path.join(w,'t.s')).read()
+# границы функций по меткам .L_<addr> (адреса из nm)
+fns = []
+for line in open(os.path.join(w,'fn.txt')):
+    p = line.split()
+    if len(p) >= 2:
+        fns.append((int(p[0], 16), p[1]))
+fns.sort()
+# выбрать функцию: по имени, иначе по индексу
+if any(n == func for _, n in fns):
+    fns_idx = [i for i, (_, n) in enumerate(fns) if n == func][0]
+else:
+    fns_idx = idx
+addr = fns[fns_idx][0]
+next_addr = fns[fns_idx+1][0] if fns_idx+1 < len(fns) else None
+lines = asm.split('\n')
+start = None
+for i, l in enumerate(lines):
+    if re.match(rf'^\.L_{addr:x}:$', l):
+        start = i; break
+if start is None:
+    body = [l for l in lines if l.strip()][:12]
+else:
+    end = len(lines)
+    if next_addr is not None:
+        for j in range(start+1, len(lines)):
+            if re.match(rf'^\.L_{next_addr:x}:$', lines[j]):
+                end = j; break
+    body = lines[start:end]
 # ABI-обёртка: callee-saved + lr, возврат через pop {pc} (делается здесь,
 # т.к. sdre эмитит по регионам и не знает границ функции)
 if any(('bl ' in l) or ('push {' in l) for l in body):
