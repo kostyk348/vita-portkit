@@ -19,6 +19,11 @@ import sys, os
 w, a0, a1, idx, r2 = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4]), sys.argv[5]
 chunks = [c for c in open(os.path.join(w,'t.s')).read().split('\n\n') if c.strip()]
 body = chunks[idx].split('\n')
+# ABI-обёртка: callee-saved + lr, возврат через pop {pc} (делается здесь,
+# т.к. sdre эмитит по регионам и не знает границ функции)
+if any(('bl ' in l) or ('push {' in l) for l in body):
+    body = [l for l in body if 'bx lr' not in l]
+    body = ['    push {r4-r10, lr}'] + body + ['    pop {r4-r10, pc}']
 r2line = f"mov r2, #{r2}" if r2 else ""
 open(os.path.join(w,'h.s'),'w').write(f""".syntax unified
 .text
