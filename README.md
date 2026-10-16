@@ -1,5 +1,8 @@
 # vita-portkit — инструменты переноса ПК-игр на PS Vita
 
+[![Release](https://img.shields.io/github/v/release/kostyk348/vita-portkit?sort=semver&color=blue)](https://github.com/kostyk348/vita-portkit/releases)
+[![Last commit](https://img.shields.io/github/last-commit/kostyk348/vita-portkit?branch=main)](https://github.com/kostyk348/vita-portkit/commits/main)
+
 Цель: универсальный конвейер **x86_64 → ARM32 (PS Vita)** + переиспользуемая обвязка.
 
 ## Что уже проверено (факты)
